@@ -1,0 +1,21 @@
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wikibase: <http://wikiba.se/ontology#>
+PREFIX bd: <http://www.bigdata.com/rdf#>
+
+SELECT ?countryLabel ?population (round(?population/?worldpopulation*1000)/10 AS ?percentage)
+WHERE {
+    ?country wdt:P31 wd:Q3624078;    # is a sovereign state
+    wdt:P1082 ?population.
+
+    {
+        # subquery to determine ?worldpopulation
+        SELECT (sum(?population) AS ?worldpopulation)
+        WHERE {
+            ?country wdt:P31 wd:Q3624078;    # is a sovereign state
+            wdt:P1082 ?population.
+            FILTER(?population > 1000)
+        } ORDER BY ?worldpopulation
+    }
+}
+ORDER BY desc(?population)

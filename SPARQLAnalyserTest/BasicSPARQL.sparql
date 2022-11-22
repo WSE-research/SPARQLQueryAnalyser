@@ -1,0 +1,5 @@
+PREFIX test: <http://example.com>
+
+SELECT DISTINCT ?s ?o {
+    ?s a ?o .
+}

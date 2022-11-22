@@ -1,0 +1,7 @@
+PREFIX qab: <urn:qa:benchmark#> 
+
+SELECT ?question ?text 
+{
+    ?question qab:isElementOf ?benchmark ; 
+        qab:hasSPARQLQuery/qab:queryText ?text . 
+}
