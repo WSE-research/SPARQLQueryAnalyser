@@ -1,28 +1,31 @@
 ﻿using System.Text;
 using VDS.RDF;
 using VDS.RDF.Parsing;
-using SPARQLAnalyser;
 using VDS.RDF.Storage;
 using VDS.RDF.Writing.Formatting;
+using SPARQLParser;
+using System.Text.Json;
 
-// stardog connection settings
-const string baseUri = "http://demos.swe.htwk-leipzig.de:40100";
-const string username = "admin";
-const string password = "admin";
-const string dbname = "RDFized-datasets";
-
-const int batchSize = 20;
+const int batchSize = 2048;
 
 // custom prefixes for analysed SPARQL queries
 var prefixes = File.ReadAllText("prefixes.sparql");
+var statePath = Path.Join("analyse", "state.json");
 
 // prefixes for the insert statement
 const string qab = "urn:qa:benchmark#";
 
 // query parser and Stardog connection
 var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
-var queryReader = new StardogSparqlConnector(baseUri, username, password, dbname, 
-    File.ReadAllText("GetQueries.sparql"));
+
+var queryReader = JsonSerializer.Deserialize<IDbConnector>(File.ReadAllText(Path.Join("analyse", "connector.json")));
+var queries = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(Path.Join("analyse", "queries.json")));
+var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(statePath));
+
+if (queries is null || state is null) return;
+
+state.State = AnalysisState.Running;
+File.WriteAllText(statePath, JsonSerializer.Serialize(state));
 
 var parsable = 0;
 var nonParsable = 0;
@@ -30,25 +33,25 @@ var nonParsable = 0;
 var questions = new Dictionary<string, int>();
 var allQuestions = new Dictionary<string, int>();
 var parseExceptions = new HashSet<string>();
-var nullReferenceIds = new List<string>();
 
 var count = 0;
-var nullPointers = 0;
 
 var triples = new List<Triple>();
 
 var insert = new StringBuilder();
 insert.Append("PREFIX qab: <").Append(qab).Append(">\nINSERT{\n");
 
-foreach (var result in queryReader.GetQueries())
+var batch = 0;
+
+foreach (var queryString in queries)
 {
     var g = new Graph();
     g.NamespaceMap.AddNamespace("qab", new Uri(qab));
     
     // get SPARQL query, question ID and benchmark name
-    var queryText = result.Value("text").ToString().Replace(" OR ", " || ");
-    var question = result.Value("question").ToString();
-    var benchmarkDataset = question.Split("-question")[0];
+    var queryText = queryString.Split(@"/||\").Last().Replace(" OR ", " || ") ;
+    var question = queryString.Split(@"/||\").First();
+    var benchmarkDataset = question.Split("-question").First();
 
     // count questions per benchmark
     if (allQuestions.ContainsKey(benchmarkDataset))
@@ -82,43 +85,58 @@ foreach (var result in queryReader.GetQueries())
         triples.Add(new Triple(g.CreateUriNode(new Uri(question)), g.CreateUriNode(new Uri("urn:qa:benchmark#queryType")),
             g.CreateLiteralNode(queryType)));
 
+        // batch parsed
         if (++count % batchSize == 0)
         {
+            // add all triples to INSERT query
             foreach (var triple in triples)
             {
-                insert.Append(triple.ToString(new TurtleFormatter())).Append("\n");
+                insert.Append(triple.ToString(new TurtleFormatter())).Append('\n');
             }
 
+            // finalize query
             insert.Append("} WHERE {}");
+
+            batch = count / batchSize;
             
+            // execute query
             while (true)
             {
                 try
                 {
-                    queryReader.UploadStats(insert.ToString());
+                    // run INSERT query and reset it for next batch
+                    if (queryReader is not null && queryReader.UploadToDb())
+                    {
+                        queryReader.UploadStats(insert.ToString());
+                    }
+                    else
+                    {
+                        File.WriteAllText($"{batch}.sparql", insert.ToString());
+                    }
+
                     triples.Clear();
                     insert.Clear().Append("PREFIX qab: <").Append(qab).Append(">\nINSERT {\n");
 
-                    Console.WriteLine($"Inserted batch {count / batchSize}..");
+                    Console.WriteLine($"Inserted batch {batch}..");
                     break;
                 }
+                // query execution killed before finishing
                 catch (RdfStorageException) { }
             }
         }
     }
-    catch (Exception e) when (e is RdfParseException or RdfException or NullReferenceException)
+    // exceptions while parsing
+    catch (Exception e) when (e is RdfParseException or RdfException)
     {
         switch (e)
         {
+            // invalid SPARQL query
             case RdfParseException or RdfException:
                 parseExceptions.Add( benchmarkDataset + "\t" + e.Message);
                 break;
-            case NullReferenceException:
-                nullPointers++;
-                nullReferenceIds.Add(string.Join('-', question.Split("-").Skip(3)));
-                break;
         }
         
+        // count not parsable questions per benchmark
         if (questions.ContainsKey(benchmarkDataset))
         {
             questions[benchmarkDataset]++;    
@@ -132,37 +150,51 @@ foreach (var result in queryReader.GetQueries())
     }
 }
 
+// finalize last batch
 Console.WriteLine("Inserting last triples...");
 foreach (var triple in triples)
 {
-    insert.Append(triple.ToString(new NTriplesFormatter())).Append("\n");
+    insert.Append(triple.ToString(new NTriplesFormatter())).Append('\n');
 }
 
 insert.Append("} WHERE {}");
 
+// run last INSERT query
 while (triples.Count != 0)
 {
     try
     {
-        queryReader.UploadStats(insert.ToString());
+        if (queryReader is not null && queryReader.UploadToDb())
+        {
+            queryReader.UploadStats(insert.ToString());    
+        }
+        else
+        {
+            File.WriteAllText(Path.Join("analyse", $"{++batch}.sparql"), insert.ToString());
+        }
         triples.Clear();
     }
     catch(RdfStorageException) {}
 }
 
-File.WriteAllLines("CWQNullPointers.txt", nullReferenceIds);
-
-Console.WriteLine("\nExceptions");
-foreach (var entry in parseExceptions)
+var analysisStatistics = new SparqlAnalysisStatistics
 {
-    Console.Error.WriteLine(entry);
+    Parsable = parsable,
+    NonParsable = nonParsable
+};
+
+foreach (var exception in parseExceptions)
+{
+    analysisStatistics.Exceptions.Add(exception);
 }
 
-Console.WriteLine($"\nParsable:\t{parsable}");
-Console.WriteLine("Not parsable:\t" + nonParsable);
-Console.WriteLine("Null Pointer exceptions:\t" + nullPointers);
+state.State = AnalysisState.Finished;
+analysisStatistics.State = state;
 
+File.WriteAllText(Path.Join("analyse", "statistics.json"), JsonSerializer.Serialize(analysisStatistics));
+
+// print number of not parsed questions per benchmark as error messages
 foreach (var entry in questions)
 {
-    Console.WriteLine($"{entry.Key}\t{entry.Value}\t{(float) entry.Value / allQuestions[entry.Key]:F4}");
+    Console.Error.WriteLine($"{entry.Key}\t{entry.Value}\t{(float) entry.Value / allQuestions[entry.Key]:F4}");
 }

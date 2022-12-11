@@ -4,6 +4,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SPARQLAnalyser", "SPARQLAna
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SPARQLAnalyserTest", "SPARQLAnalyserTest\SPARQLAnalyserTest.csproj", "{39F5FFCD-7D14-4D9A-AED7-DEFD0255F02D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "API", "API\API.csproj", "{1E61C7BE-47BF-4DE4-8DEE-062B4F931F4B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SPARQLParser", "SPARQLParser\SPARQLParser.csproj", "{729388FC-244F-43AB-8594-D8E760E9B79D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -18,5 +22,13 @@ Global
 		{39F5FFCD-7D14-4D9A-AED7-DEFD0255F02D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{39F5FFCD-7D14-4D9A-AED7-DEFD0255F02D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{39F5FFCD-7D14-4D9A-AED7-DEFD0255F02D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1E61C7BE-47BF-4DE4-8DEE-062B4F931F4B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1E61C7BE-47BF-4DE4-8DEE-062B4F931F4B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1E61C7BE-47BF-4DE4-8DEE-062B4F931F4B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1E61C7BE-47BF-4DE4-8DEE-062B4F931F4B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{729388FC-244F-43AB-8594-D8E760E9B79D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{729388FC-244F-43AB-8594-D8E760E9B79D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{729388FC-244F-43AB-8594-D8E760E9B79D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{729388FC-244F-43AB-8594-D8E760E9B79D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

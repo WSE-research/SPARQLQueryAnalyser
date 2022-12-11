@@ -1,48 +1,79 @@
-﻿using VDS.RDF.Query;
+﻿using System.Globalization;
+using VDS.RDF.Query;
 using VDS.RDF.Query.Patterns;
 using VDS.RDF.Storage;
 
-namespace SPARQLAnalyser;
+namespace SPARQLParser;
 
-/// <summary>
-/// Class providing SPARQL queries stored with Stardog
-/// </summary>
-public class StardogSparqlConnector
+public interface IDbConnector
 {
-    private readonly StardogConnector _connector;
-    private readonly string _selectQueriesQuery;
-
     /// <summary>
-    /// Initialize connection to a Stardog instance
+    /// Use current DB to upload statistics
     /// </summary>
-    /// <param name="stardogBaseUri">BaseURI for the used Stardog instance (e. g. http://localhost:5820)</param>
-    /// <param name="stardogUsername">Stardog username</param>
-    /// <param name="stardogPassword">Stardog password</param>
-    /// <param name="database">Database used as query storage</param>
-    /// <param name="selectQueriesQuery">Query used to get the stored SPARQL queries</param>
-    public StardogSparqlConnector(string stardogBaseUri, string stardogUsername, string stardogPassword,
-        string database, string selectQueriesQuery)
-    {
-        _selectQueriesQuery = selectQueriesQuery;
-        _connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
-    }
-
+    /// <returns></returns>
+    public bool UploadToDb();
+    
     /// <summary>
     /// Execute an INSERT query for the statistics generated for the managed SPARQL queries
     /// </summary>
     /// <param name="query">INSERT query for stardog database</param>
-    public void UploadStats(string query)
-    {
-        _connector.Update(query);
-    }
+    public void UploadStats(string query);
+    
+    /// <summary>
+    /// Load all queries from DB and build a list with them.
+    /// </summary>
+    /// <returns>List of strings in the format "SPARQLQuery/||\QuestionID"</returns>
+    public IEnumerable<string> GetQueries();
+}
+
+/// <summary>
+/// Class providing SPARQL queries stored with Stardog
+/// </summary>
+public class StardogSparqlConnector: IDbConnector
+{
+    private StardogConnector Connector { get; }
+    private string SelectQueriesQuery { get; }
+    private string QueryId { get; }
+    private string QuestionName { get; }
+    private bool Upload { get; }
 
     /// <summary>
-    /// Get an iterator over the fetched SPARQL queries
+    /// Initialize connection to a Stardog instance
     /// </summary>
-    /// <returns>SparqlResultSet with all selected SPARQL queries</returns>
-    public SparqlResultSet GetQueries()
+    /// <param name="stardogBaseUri">Base URI for the used Stardog instance (e. g. http://localhost:5820)</param>
+    /// <param name="stardogUsername">Stardog username</param>
+    /// <param name="stardogPassword">Stardog password</param>
+    /// <param name="database">Database used as query storage</param>
+    /// <param name="selectQueriesQuery">Query used to get the stored SPARQL queries</param>
+    /// <param name="upload">Use current DB to upload statistics</param>
+    /// <param name="queryId">Variable name of "selectQueriesQuery" for query ids</param>
+    /// <param name="questionName">Variable name of "selectQueriesQuery" for query string</param>
+    public StardogSparqlConnector(string stardogBaseUri, string stardogUsername, string stardogPassword,
+        string database, string selectQueriesQuery, bool upload, string queryId = "question", string questionName = "text")
     {
-        return (SparqlResultSet) _connector.Query(_selectQueriesQuery);
+        SelectQueriesQuery = selectQueriesQuery;
+        Connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
+        QueryId = queryId;
+        QuestionName = questionName;
+        Upload = upload;
+    }
+    
+    public void UploadStats(string query)
+    {
+        Connector.Update(query);
+    }
+    
+    public IEnumerable<string> GetQueries()
+    {
+        var results = (SparqlResultSet) Connector.Query(SelectQueriesQuery);
+
+        return (from sparqlResult in results let query = sparqlResult.Value(QueryId).ToString()
+            let question = sparqlResult.Value(QuestionName).ToString() select @$"{query}/||\{question}").ToList();
+    }
+
+    public bool UploadToDb()
+    {
+        return Upload;
     }
 }
 
@@ -162,10 +193,10 @@ public static class SparqlParser
     /// <returns>number of ORDER BY statements</returns>
     private static int GetOrderBys(SparqlQuery query)
     {
-        int GetOrderBysSubQuery(GraphPattern pattern)
+        int OrderBysSubQuery(GraphPattern pattern)
         {
             // Get ORDER BY statements of all child graphs
-            var subQueryOrderBys = pattern.ChildGraphPatterns.Sum(GetOrderBysSubQuery);
+            var subQueryOrderBys = pattern.ChildGraphPatterns.Sum(OrderBysSubQuery);
 
             // foreach triple in current subgraph
             foreach (var triplePattern in pattern.TriplePatterns)
@@ -181,7 +212,7 @@ public static class SparqlParser
         }
         
         // Get number of ORDER BY statements from possible sub queries
-        var orderBys = GetOrderBysSubQuery(query.RootGraphPattern);
+        var orderBys = OrderBysSubQuery(query.RootGraphPattern);
         
         // Current query has an ORDER BY statement
         if (query.OrderBy is not null)
@@ -200,10 +231,10 @@ public static class SparqlParser
     private static int GetLimits(SparqlQuery query)
     {
         // get number of LIMIT statements of a sub query
-        int GetLimitsSubQuery(GraphPattern pattern)
+        int LimitsSubQuery(GraphPattern pattern)
         {
             // get number of LIMIT statements of each child graph
-            var subQueryLimits = pattern.ChildGraphPatterns.Sum(GetLimitsSubQuery);
+            var subQueryLimits = pattern.ChildGraphPatterns.Sum(LimitsSubQuery);
 
             // 
             foreach (var triplePattern in pattern.TriplePatterns)
@@ -218,7 +249,7 @@ public static class SparqlParser
         }
 
         // get number of LIMIT statements of all possible sub queries
-        var limits = GetLimitsSubQuery(query.RootGraphPattern);
+        var limits = LimitsSubQuery(query.RootGraphPattern);
 
         // current query uses a LIMIT expression
         if (query.Limit >= 0)
@@ -237,10 +268,10 @@ public static class SparqlParser
     private static int GetHaving(SparqlQuery query)
     {
         // get number of HAVING statements for all sub queries
-        int GetHavingSubQuery(GraphPattern pattern)
+        int HavingSubQuery(GraphPattern pattern)
         {
             // get number of HAVING statements of all child graphs
-            var havingSubQuery = pattern.ChildGraphPatterns.Sum(GetHavingSubQuery);
+            var havingSubQuery = pattern.ChildGraphPatterns.Sum(HavingSubQuery);
 
             // foreach triple in current graph
             foreach (var triplePattern in pattern.TriplePatterns)
@@ -256,7 +287,7 @@ public static class SparqlParser
         }
         
         // number of HAVING statements in possible sub queries
-        var having = GetHavingSubQuery(query.RootGraphPattern);
+        var having = HavingSubQuery(query.RootGraphPattern);
 
         // current query has a HAVING statement
         if (query.Having is not null)
@@ -275,10 +306,10 @@ public static class SparqlParser
     private static int GetOffsets(SparqlQuery query)
     {
         // get number of OFFSET statements in a sub query
-        int GetOffsetsSubQuery(GraphPattern pattern)
+        int OffsetsSubQuery(GraphPattern pattern)
         {
             // get number of OFFSET statements in all child graphs
-            var offsetsSubQuery = pattern.ChildGraphPatterns.Sum(GetOffsetsSubQuery);
+            var offsetsSubQuery = pattern.ChildGraphPatterns.Sum(OffsetsSubQuery);
             
             // foreach triple in the current sub query
             foreach (var triplePattern in pattern.TriplePatterns)
@@ -294,7 +325,7 @@ public static class SparqlParser
         }
 
         // number of OFFSET statements in possible sub queries
-        var offsets = GetOffsetsSubQuery(query.RootGraphPattern);
+        var offsets = OffsetsSubQuery(query.RootGraphPattern);
 
         // current query has an OFFSET statement
         if (query.Offset > 0)
@@ -313,10 +344,10 @@ public static class SparqlParser
     private static int GetGroupBys(SparqlQuery query)
     {
         // get number of GROUP BY statements of a sub query
-        int GetGroupBysSubQuery(GraphPattern pattern)
+        int GroupBysSubQuery(GraphPattern pattern)
         {
             // get number of GROUP BY statements of all child graphs
-            var groupBysSubQuery = pattern.ChildGraphPatterns.Sum(GetGroupBysSubQuery);
+            var groupBysSubQuery = pattern.ChildGraphPatterns.Sum(GroupBysSubQuery);
 
             // foreach triple in current graph
             foreach (var triplePattern in pattern.TriplePatterns)
@@ -332,7 +363,7 @@ public static class SparqlParser
         }
 
         // number of GROUP BY statements of all possible sub queries
-        var groupBys = GetGroupBysSubQuery(query.RootGraphPattern);
+        var groupBys = GroupBysSubQuery(query.RootGraphPattern);
 
         // current query has a GROUP BY statement
         if (query.GroupBy is not null)
@@ -376,4 +407,17 @@ public static class SparqlParser
 
         return queryStats;
     }
+}
+
+public class SparqlAnalysisState
+{
+    public AnalysisState State { get; set; } = AnalysisState.Initialized;
+    public string CreatedAt { get; } = DateTime.Now.ToString(CultureInfo.InvariantCulture);
+    public string? FinishedAt { get; set; }
+    public string Id { get; } = Guid.NewGuid().ToString();
+}
+
+public enum AnalysisState
+{
+    Initialized, Running, Failed, Finished
 }
