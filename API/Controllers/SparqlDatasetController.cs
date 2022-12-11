@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using AngleSharp.Common;
 using Microsoft.AspNetCore.Mvc;
 using SPARQLParser;
 using Docker.DotNet;
@@ -30,6 +31,11 @@ public class SparqlDatasetController : Controller
         return directories.Select(directory => directory.Split(Path.DirectorySeparatorChar).Last()).ToList();
     }
 
+    /// <summary>
+    /// Get the output of the current statistics
+    /// </summary>
+    /// <param name="id">ID of the task</param>
+    /// <returns>Statistics of the parsed SPARQL queries</returns>
     [HttpGet("{id}")]
     public ActionResult<SparqlAnalysisStatistics> GetStatisticsById(string id)
     {
@@ -39,17 +45,28 @@ public class SparqlDatasetController : Controller
         {
             return NotFound();
         }
-        
-        var foundStatistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(System.IO.File.ReadAllText(Path.Join(path, "statistics.json")));
 
-        if (foundStatistics is null)
+        try
+        {
+            var statistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(
+                System.IO.File.ReadAllText(Path.Join(path, "statistics.json")));
+
+            if (statistics is null)
+                return NotFound();
+
+            return statistics;
+        }
+        catch (FileNotFoundException)
         {
             return NotFound();
         }
-        
-        return foundStatistics;
     }
 
+    /// <summary>
+    /// Creates an asynchronous task for SPARQL analysis using a remote DB
+    /// </summary>
+    /// <param name="config">Configuration for the task</param>
+    /// <returns>Initialized state with task id</returns>
     [HttpPost("db")]
     public ActionResult<SparqlAnalysisState> StartAnalysis(DatabaseConfig config)
     {
@@ -82,6 +99,11 @@ public class SparqlDatasetController : Controller
         return createdState;
     }
     
+    /// <summary>
+    /// Creates an asynchronous task for SPARQL analysis using a list of queries
+    /// </summary>
+    /// <param name="config">Configuration for the task</param>
+    /// <returns>Initialized state with task id</returns>
     [HttpPost("plaintext")]
     public ActionResult<SparqlAnalysisState> StartAnalysis(PlainTextAnalysisConfig config)
     {
@@ -91,18 +113,36 @@ public class SparqlDatasetController : Controller
         _logger.Log(LogLevel.Information, "Start new analysis for {Id} on plain-text at {CreatedAt}", createdState.Id, createdState.CreatedAt);
         
         Directory.CreateDirectory(runDirectory);
+
+        var queriesWithId = new List<string>();
+
+        for (var i = 0; i < config.Queries.Count(); i++)
+        {
+            queriesWithId.Add($@"{i}/||\{config.Queries.GetItemByIndex(i)}");
+        }
         
-        StoreState(config.Queries, createdState);
+        StoreState(queriesWithId, createdState);
         StartDockerAnalyser(createdState.Id);
 
         return createdState;
     }
 
+    /// <summary>
+    /// Get the directory for a given task
+    /// </summary>
+    /// <param name="state">State of the task</param>
+    /// <returns>Local directory path for the given task</returns>
     private static string BuildDirectory(SparqlAnalysisState state)
     {
         return Path.Join("analysis", state.Id);
     }
 
+    /// <summary>
+    /// Serializes all data needed for the analyser task
+    /// </summary>
+    /// <param name="queries">List of SPARQL queries</param>
+    /// <param name="state">Current state of the task</param>
+    /// <param name="config">Configuration of DB connection if used</param>
     private static void StoreState(IEnumerable<string> queries, SparqlAnalysisState state, DatabaseConfig? config = null)
     {
         var directory = BuildDirectory(state);
