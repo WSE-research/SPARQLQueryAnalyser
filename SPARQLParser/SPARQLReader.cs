@@ -1,10 +1,15 @@
-﻿using System.Globalization;
+﻿using System.ComponentModel;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using VDS.RDF.Query;
 using VDS.RDF.Query.Patterns;
 using VDS.RDF.Storage;
 
 namespace SPARQLParser;
 
+/// <summary>
+/// Interface for fetching SPARQL queries from a database and uploading generated statistics
+/// </summary>
 public interface IDbConnector
 {
     /// <summary>
@@ -31,11 +36,11 @@ public interface IDbConnector
 /// </summary>
 public class StardogSparqlConnector: IDbConnector
 {
-    private StardogConnector Connector { get; }
-    private string SelectQueriesQuery { get; }
-    private string QueryId { get; }
-    private string QuestionName { get; }
-    private bool Upload { get; }
+    private readonly StardogConnector _connector;
+    private readonly string _selectQueriesQuery;
+    private readonly string _queryId;
+    private readonly string _questionName;
+    private readonly bool _upload;
 
     /// <summary>
     /// Initialize connection to a Stardog instance
@@ -51,29 +56,29 @@ public class StardogSparqlConnector: IDbConnector
     public StardogSparqlConnector(string stardogBaseUri, string stardogUsername, string stardogPassword,
         string database, string selectQueriesQuery, bool upload, string queryId = "question", string questionName = "text")
     {
-        SelectQueriesQuery = selectQueriesQuery;
-        Connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
-        QueryId = queryId;
-        QuestionName = questionName;
-        Upload = upload;
+        _selectQueriesQuery = selectQueriesQuery;
+        _connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
+        _queryId = queryId;
+        _questionName = questionName;
+        _upload = upload;
     }
     
     public void UploadStats(string query)
     {
-        Connector.Update(query);
+        _connector.Update(query);
     }
     
     public IEnumerable<string> GetQueries()
     {
-        var results = (SparqlResultSet) Connector.Query(SelectQueriesQuery);
+        var results = (SparqlResultSet) _connector.Query(_selectQueriesQuery);
 
-        return (from sparqlResult in results let query = sparqlResult.Value(QueryId).ToString()
-            let question = sparqlResult.Value(QuestionName).ToString() select @$"{query}/||\{question}").ToList();
+        return (from sparqlResult in results let query = sparqlResult.Value(_queryId).ToString()
+            let question = sparqlResult.Value(_questionName).ToString() select @$"{query}/||\{question.Replace('\n', ' ')}").ToList();
     }
 
     public bool UploadToDb()
     {
-        return Upload;
+        return _upload;
     }
 }
 
@@ -144,11 +149,12 @@ public static class SparqlParser
     /// Get number of resources used inside a SPARQL query (subjects/predicates/objects that aren't variables)
     /// </summary>
     /// <param name="pattern">SPARQL graph pattern to analyse</param>
+    /// <param name="predicates">true, if predicates as resources should be counted, else false</param>
     /// <returns>Number of resources used in a SPARQL query</returns>
-    private static int GetResources(GraphPattern pattern)
+    private static int GetResources(GraphPattern pattern, bool predicates)
     {
         // Get resources of all child graphs
-        var resources = pattern.ChildGraphPatterns.Sum(GetResources);
+        var resources = pattern.ChildGraphPatterns.Sum(childPattern => GetResources(childPattern, predicates));
 
         // foreach triple in current graph
         foreach (var triplePattern in pattern.TriplePatterns)
@@ -157,7 +163,7 @@ public static class SparqlParser
             if (triplePattern is SubQueryPattern subQueryPattern)
             {
                 // count resources of sub query
-                resources += GetResources(subQueryPattern.SubQuery.RootGraphPattern);
+                resources += GetResources(subQueryPattern.SubQuery.RootGraphPattern, predicates);
                 continue;
             }
             
@@ -171,7 +177,7 @@ public static class SparqlParser
             }
 
             // predicate is a resource
-            if (triple.Predicate is NodeMatchPattern)
+            if (predicates && triple.Predicate is NodeMatchPattern)
             {
                 resources++;
             }
@@ -373,6 +379,28 @@ public static class SparqlParser
 
         return groupBys;
     }
+
+    private static int GetQueryLength(SparqlQuery query)
+    {
+        var queryString = query.ToString();
+        var namespaces = query.NamespaceMap;
+
+        foreach (var prefix in namespaces.Prefixes)
+        {
+            var fullUri = namespaces.GetNamespaceUri(prefix);
+            var uriReplace = $" {fullUri}";
+            queryString = queryString.Replace($" {prefix}:", uriReplace);
+            queryString = Regex.Replace(queryString, @$"{uriReplace}\w+", "<urn:placeholder>");
+            queryString = queryString.Replace($"PREFIX {fullUri} <{fullUri}>", "");
+
+            if (prefix == "")
+            {
+                queryString = queryString.Replace($"BASE <{fullUri}>", "");
+            }
+        }
+
+        return queryString.Replace("\n", "").Length;
+    }
     
     /// <summary>
     /// Analyses a SPARQL query and returns a Dictionary with its statistics
@@ -397,8 +425,14 @@ public static class SparqlParser
             ["urn:qa:benchmark#numberOfTriples"] = GetTriples(query.RootGraphPattern),
             ["urn:qa:benchmark#numberOfFilters"] = GetFilters(query.RootGraphPattern),
             ["urn:qa:benchmark#numberOfVariables"] = query.Variables.Count(),
-            ["urn:qa:benchmark#numberOfResources"] = GetResources(query.RootGraphPattern)
+            ["urn:qa:benchmark#numberOfResources"] = GetResources(query.RootGraphPattern, true),
+            ["urn:qa:benchmark#normalizedQueryLength"] = GetQueryLength(query),
+            ["urn:qa:benchmark#numberOfResourcesSubjectsObjects"] = GetResources(query.RootGraphPattern, false)
         };
+
+        queryStats["urn:qa:benchmark#numberOfResourcesPredicates"] = queryStats["urn:qa:benchmark#numberOfResources"] -
+                                                                     queryStats[
+                                                                         "urn:qa:benchmark#numberOfResourcesSubjectsObjects"];
 
         foreach (var entry in modifierStats)
         {
@@ -409,12 +443,58 @@ public static class SparqlParser
     }
 }
 
+public enum DbType
+{
+    Unknown = -1, Stardog
+}
+
+public class DatabaseConfig
+{
+    public DbType Type { get; }
+    public string SelectQuery { get; }
+    public string Username { get; }
+    public string Password { get; }
+    public string DatabaseName { get; }
+    public string DatabaseUri { get; }
+    public int DatabasePort { get; }
+    public bool Upload { get; }
+
+    public DatabaseConfig(DbType type, string databaseUri, int databasePort, string databaseName, string username, 
+        string password, string selectQuery, bool upload)
+    {
+        Type = type;
+        DatabaseUri = databaseUri;
+        DatabasePort = databasePort;
+        DatabaseName = databaseName;
+        Username = username;
+        Password = password;
+        SelectQuery = selectQuery;
+        Upload = upload;
+    }
+
+    /// <summary>
+    /// Construct a IDbConnector from the given settings
+    /// </summary>
+    /// <returns>IDbConnector with the given settings</returns>
+    /// <exception cref="InvalidEnumArgumentException">An invalid setting has been provided</exception>
+    public IDbConnector Construct()
+    {
+        return Type switch
+        {
+            DbType.Stardog => new StardogSparqlConnector($"{DatabaseUri}:{DatabasePort}", Username, Password,
+                DatabaseName, SelectQuery, Upload),
+            DbType.Unknown => throw new InvalidEnumArgumentException("Select a proper DB type"),
+            _ => throw new InvalidEnumArgumentException("Invalid DB type selected")
+        };
+    }
+}
+
 public class SparqlAnalysisState
 {
     public AnalysisState State { get; set; } = AnalysisState.Initialized;
-    public string CreatedAt { get; } = DateTime.Now.ToString(CultureInfo.InvariantCulture);
+    public string CreatedAt { get; set; } = DateTime.UtcNow.ToString(CultureInfo.InvariantCulture);
     public string? FinishedAt { get; set; }
-    public string Id { get; } = Guid.NewGuid().ToString();
+    public string Id { get; set; } = Guid.NewGuid().ToString();
 }
 
 public enum AnalysisState

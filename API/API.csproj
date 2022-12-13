@@ -23,4 +23,20 @@
       <Folder Include="analysis" />
     </ItemGroup>
 
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\connector.json" />
+      <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\queries.json" />
+      <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\state.json" />
+      <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\statistics.json" />
+      <_ContentIncludedByDefault Remove="analysis\e1adecb9-a159-49c9-9cf8-2cf82d273f71\connector.json" />
+      <_ContentIncludedByDefault Remove="analysis\e1adecb9-a159-49c9-9cf8-2cf82d273f71\state.json" />
+      <_ContentIncludedByDefault Remove="analysis\e1adecb9-a159-49c9-9cf8-2cf82d273f71\statistics.json" />
+      <_ContentIncludedByDefault Remove="analysis\360fe9d2-185f-4881-87b8-988d7d40ac86\connector.json" />
+      <_ContentIncludedByDefault Remove="analysis\360fe9d2-185f-4881-87b8-988d7d40ac86\state.json" />
+      <_ContentIncludedByDefault Remove="analysis\360fe9d2-185f-4881-87b8-988d7d40ac86\statistics.json" />
+      <_ContentIncludedByDefault Remove="analysis\be0205a5-45a2-4afb-bebc-377f55bb2104\connector.json" />
+      <_ContentIncludedByDefault Remove="analysis\be0205a5-45a2-4afb-bebc-377f55bb2104\state.json" />
+      <_ContentIncludedByDefault Remove="analysis\be0205a5-45a2-4afb-bebc-377f55bb2104\statistics.json" />
+    </ItemGroup>
+
 </Project>

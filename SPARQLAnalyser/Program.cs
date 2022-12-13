@@ -1,16 +1,19 @@
-﻿using System.Text;
+﻿using System.Globalization;
+using System.Text;
 using VDS.RDF;
 using VDS.RDF.Parsing;
 using VDS.RDF.Storage;
 using VDS.RDF.Writing.Formatting;
 using SPARQLParser;
 using System.Text.Json;
+using VDS.RDF.Query;
 
-const int batchSize = 2048;
+const int batchSize = 40;
 
 // custom prefixes for analysed SPARQL queries
-var prefixes = File.ReadAllText("prefixes.sparql");
-var statePath = Path.Join("analyse", "state.json");
+var prefixDictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText("prefixes.json"));
+
+var statisticsPath = Path.Join("analyse", "statistics.json");
 
 // prefixes for the insert statement
 const string qab = "urn:qa:benchmark#";
@@ -18,21 +21,25 @@ const string qab = "urn:qa:benchmark#";
 // query parser and Stardog connection
 var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
 
-var queryReader = JsonSerializer.Deserialize<IDbConnector>(File.ReadAllText(Path.Join("analyse", "connector.json")));
-var queries = JsonSerializer.Deserialize<List<string>>(File.ReadAllText(Path.Join("analyse", "queries.json")));
-var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(statePath));
+var dbConfig = JsonSerializer.Deserialize<DatabaseConfig>(File.ReadAllText(Path.Join("analyse", "connector.json")));
+var queryReader = dbConfig?.Construct();
+var queries = File.ReadAllLines(Path.Join("analyse", "queries"));
+var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(Path.Join("analyse", "state.json")));
+var statistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(File.ReadAllText(statisticsPath));
 
-if (queries is null || state is null) return;
+if (state is null) return;
 
 state.State = AnalysisState.Running;
-File.WriteAllText(statePath, JsonSerializer.Serialize(state));
+statistics!.State = state;
 
-var parsable = 0;
+File.WriteAllText(statisticsPath, JsonSerializer.Serialize(statistics));
+
+var parsable = queries.Length;
 var nonParsable = 0;
 
 var questions = new Dictionary<string, int>();
-var allQuestions = new Dictionary<string, int>();
 var parseExceptions = new HashSet<string>();
+var benchmarkPrefix = new Dictionary<string, HashSet<Uri>>();
 
 var count = 0;
 
@@ -53,26 +60,62 @@ foreach (var queryString in queries)
     var question = queryString.Split(@"/||\").First();
     var benchmarkDataset = question.Split("-question").First();
 
-    // count questions per benchmark
-    if (allQuestions.ContainsKey(benchmarkDataset))
-    {
-        allQuestions[benchmarkDataset]++;
-    }
-    else
-    {
-        allQuestions[benchmarkDataset] = 1;
-    }
-    
     try
     {
-        // parse query and optimize it
-        var query = queryParser.ParseFromString($"{prefixes} {queryText}");
-        query.Optimise();
+        var prefixes = new StringBuilder();
         
-        parsable++;
+        SparqlQuery query;
+        while (true)
+        {
+            try
+            {
+                // parse query
+                var queryBuilder = new StringBuilder().Append(prefixes.ToString()).Append(queryText);
+                query = queryParser.ParseFromString(queryBuilder.ToString());
+                break;
+            }
+            catch (RdfException e)
+            {
+                // missing PREFIX provided by original knowledge graph
+                if (e.Message.Contains("The Namespace URI for the given Prefix"))
+                {
+                    // get prefix name and uri
+                    var prefix = e.Message.Split('\u0027').Skip(1).First();
+                    var prefixUri = prefixDictionary?[prefix];
+
+                    // add prefix to query string
+                    prefixes.Append($"PREFIX {prefix}: <{prefixUri}>\n");
+                    continue;
+                }
+
+                // missing BASE uri
+                if (e.Message.Contains("there is no in-scope Base URI!"))
+                {
+                    // adding BASE uri to query string
+                    var baseUri = prefixDictionary?["base"];
+                    
+                    prefixes.Append($"PREFIX : <{baseUri}>\nBASE <{baseUri}>\n");
+                    continue;
+                }
+
+                throw;
+            }
+        }
 
         // get statistics for the current query
         var queryStats = SparqlParser.AnalyseQuery(query);
+
+        // initialize Set if benchmark is new
+        if (!benchmarkPrefix.ContainsKey(benchmarkDataset))
+        {
+            benchmarkPrefix[benchmarkDataset] = new HashSet<Uri>();
+        }
+
+        // storing all prefixes used by this query
+        foreach (var prefix in query.NamespaceMap.Prefixes)
+        {
+            benchmarkPrefix[benchmarkDataset].Add(query.NamespaceMap.GetNamespaceUri(prefix));
+        }
 
         // get query type
         var queryType = query.QueryType.ToString();
@@ -109,10 +152,8 @@ foreach (var queryString in queries)
                     {
                         queryReader.UploadStats(insert.ToString());
                     }
-                    else
-                    {
-                        File.WriteAllText($"{batch}.sparql", insert.ToString());
-                    }
+                    
+                    File.WriteAllText(Path.Join("analyse", $"{batch}.sparql"), insert.ToString());
 
                     triples.Clear();
                     insert.Clear().Append("PREFIX qab: <").Append(qab).Append(">\nINSERT {\n");
@@ -126,16 +167,11 @@ foreach (var queryString in queries)
         }
     }
     // exceptions while parsing
-    catch (Exception e) when (e is RdfParseException or RdfException)
+    catch (Exception e) when (e is RdfParseException or RdfException or NullReferenceException)
     {
-        switch (e)
-        {
-            // invalid SPARQL query
-            case RdfParseException or RdfException:
-                parseExceptions.Add( benchmarkDataset + "\t" + e.Message);
-                break;
-        }
-        
+        // store error message with question id
+        parseExceptions.Add( question + "    " + e.Message);
+
         // count not parsable questions per benchmark
         if (questions.ContainsKey(benchmarkDataset))
         {
@@ -168,33 +204,59 @@ while (triples.Count != 0)
         {
             queryReader.UploadStats(insert.ToString());    
         }
-        else
-        {
-            File.WriteAllText(Path.Join("analyse", $"{++batch}.sparql"), insert.ToString());
-        }
+        
+        File.WriteAllText(Path.Join("analyse", $"{++batch}.sparql"), insert.ToString());
         triples.Clear();
     }
     catch(RdfStorageException) {}
 }
 
-var analysisStatistics = new SparqlAnalysisStatistics
+insert.Clear().Append("PREFIX qab: <").Append(qab).Append(">\nINSERT {\n");
+
+foreach (var benchmark in benchmarkPrefix.Keys)
 {
-    Parsable = parsable,
-    NonParsable = nonParsable
-};
+    if (benchmarkPrefix[benchmark].Count == 0)
+    {
+        benchmarkPrefix[benchmark].Add(new Uri("urn:no:prefix"));
+    }
+    
+    foreach (var prefixUri in benchmarkPrefix[benchmark])
+        insert.Append("<").Append(benchmark).Append("-dataset> qab:hasPrefix <").Append(prefixUri).Append("> .\n");
+}
+
+insert.Append("} WHERE {}");
+
+Console.WriteLine("Insert benchmark prefixes...");
+
+// run last INSERT query
+while (true)
+{
+    try
+    {
+        if (queryReader is not null && queryReader.UploadToDb())
+        {
+            queryReader.UploadStats(insert.ToString());    
+        }
+        
+        File.WriteAllText(Path.Join("analyse", $"{++batch}.sparql"), insert.ToString());
+        break;
+    }
+    catch(RdfStorageException) {}
+}
+
+statistics.Parsable = parsable - nonParsable;
+statistics.NonParsable = nonParsable;
 
 foreach (var exception in parseExceptions)
 {
-    analysisStatistics.Exceptions.Add(exception);
+    statistics.Exceptions.Add(exception);
 }
 
+state.FinishedAt = DateTime.UtcNow.ToString(CultureInfo.InvariantCulture);
 state.State = AnalysisState.Finished;
-analysisStatistics.State = state;
+statistics.State = state;
 
-File.WriteAllText(Path.Join("analyse", "statistics.json"), JsonSerializer.Serialize(analysisStatistics));
-
-// print number of not parsed questions per benchmark as error messages
-foreach (var entry in questions)
+File.WriteAllText(statisticsPath, JsonSerializer.Serialize(statistics, new JsonSerializerOptions
 {
-    Console.Error.WriteLine($"{entry.Key}\t{entry.Value}\t{(float) entry.Value / allQuestions[entry.Key]:F4}");
-}
+    WriteIndented = true
+}));

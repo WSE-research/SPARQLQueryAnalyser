@@ -1,0 +1,22 @@
+{
+    "wd": "https://www.wikidata.org/entity#",
+    "wdt": "http://www.wikidata.org/prop/direct/",
+    "p": "http://www.wikidata.org/prop/",
+    "ps": "http://www.wikidata.org/prop/statement/",
+    "pq": "http://www.wikidata.org/prop/qualifier/",
+    "rdfs": "http://www.w3.org/2000/01/rdf-schema#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "dbc": "http://dbpedia.org/resource/Category/",
+    "dbp": "http://dbpedia.org/property/",
+    "dbr": "http://dbpedia.org/resource/",
+    "dbo": "http://dbpedia.org/ontology/",
+    "dct": "http://purl.org/dc/terms/",
+    "yago": "http://dbpedia.org/class/yago/",
+    "skos": "http://www.w3.org/2004/02/skos/core#",
+    "psn": "http://www.wikidata.org/prop/statement/value-normalized/",
+    "wikibase": "http://wikiba.se/ontology#",
+    "foaf": "http://xmlns.com/foaf/0.1/",
+    "text": "http://www.example.org/",
+    "base": "http://www.example.org/"
+}

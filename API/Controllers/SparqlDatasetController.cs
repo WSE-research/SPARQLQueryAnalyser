@@ -118,7 +118,7 @@ public class SparqlDatasetController : Controller
 
         for (var i = 0; i < config.Queries.Count(); i++)
         {
-            queriesWithId.Add($@"{i}/||\{config.Queries.GetItemByIndex(i)}");
+            queriesWithId.Add($@"urn:db-0-question-{i}/||\{config.Queries.GetItemByIndex(i)}");
         }
         
         StoreState(queriesWithId, createdState);
@@ -147,14 +147,16 @@ public class SparqlDatasetController : Controller
     {
         var directory = BuildDirectory(state);
 
-        var queryString = JsonSerializer.Serialize(queries);
-        System.IO.File.WriteAllText(Path.Join(directory, "queries.json"), queryString);
+        System.IO.File.WriteAllLines(Path.Join(directory, "queries"), queries);
 
-        var connectorString = JsonSerializer.Serialize(config);
-        System.IO.File.WriteAllText(Path.Join(directory, "connector.json"), connectorString);
+        System.IO.File.WriteAllText(Path.Join(directory, "connector.json"), JsonSerializer.Serialize(config));
 
-        var stateString = JsonSerializer.Serialize(state);
-        System.IO.File.WriteAllText(Path.Join(directory, "state.json"), stateString);
+        System.IO.File.WriteAllText(Path.Join(directory, "state.json"), JsonSerializer.Serialize(state));
+        
+        System.IO.File.WriteAllText(Path.Join(directory, "statistics.json"), JsonSerializer.Serialize(new SparqlAnalysisStatistics
+        {
+            State = state
+        }));
     }
 
     /// <summary>
@@ -168,12 +170,12 @@ public class SparqlDatasetController : Controller
 
         var fullIdPath = Path.GetFullPath(Path.Join("analysis", id));
 
-        var containerConfig = await client.Containers.CreateContainerAsync(new CreateContainerParameters()
+        var containerConfig = await client.Containers.CreateContainerAsync(new CreateContainerParameters
         {
             Image = "sparql-analyser:latest",
             HostConfig = new HostConfig
             {
-                Mounts = new List<Mount> { new() {Source = fullIdPath, Target = "/analyse", Type = "bind"}}
+                Mounts = new List<Mount> { new() {Source = fullIdPath, Target = "/app/analyse", Type = "bind"}}
             }
         });
 
@@ -182,6 +184,11 @@ public class SparqlDatasetController : Controller
         if (containerId is null) return;
         
         _logger.Log(LogLevel.Information, "Starting container {Id}", containerId);
-        await client.Containers.StartContainerAsync(containerId, new ContainerStartParameters());
+        var started = await client.Containers.StartContainerAsync(containerId, new ContainerStartParameters());
+
+        if (!started)
+        {
+            _logger.Log(LogLevel.Error, "Container {Id} didn't start!", containerId);
+        }
     }
 }
