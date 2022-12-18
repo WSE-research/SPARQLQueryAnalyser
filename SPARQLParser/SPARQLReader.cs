@@ -38,8 +38,9 @@ public class StardogSparqlConnector: IDbConnector
 {
     private readonly StardogConnector _connector;
     private readonly string _selectQueriesQuery;
+    private readonly string _questionId;
     private readonly string _queryId;
-    private readonly string _questionName;
+    private readonly string _queryText;
     private readonly bool _upload;
 
     /// <summary>
@@ -51,15 +52,18 @@ public class StardogSparqlConnector: IDbConnector
     /// <param name="database">Database used as query storage</param>
     /// <param name="selectQueriesQuery">Query used to get the stored SPARQL queries</param>
     /// <param name="upload">Use current DB to upload statistics</param>
+    /// <param name="questionId">Variable name of "selectQueriesQuery" for question ids</param>
     /// <param name="queryId">Variable name of "selectQueriesQuery" for query ids</param>
-    /// <param name="questionName">Variable name of "selectQueriesQuery" for query string</param>
+    /// <param name="queryText">Variable name of "selectQueriesQuery" for query string</param>
     public StardogSparqlConnector(string stardogBaseUri, string stardogUsername, string stardogPassword,
-        string database, string selectQueriesQuery, bool upload, string queryId = "question", string questionName = "text")
+        string database, string selectQueriesQuery, bool upload, string questionId = "question", string queryId = "query", 
+        string queryText = "text")
     {
         _selectQueriesQuery = selectQueriesQuery;
         _connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
+        _questionId = questionId;
         _queryId = queryId;
-        _questionName = questionName;
+        _queryText = queryText;
         _upload = upload;
     }
     
@@ -72,8 +76,9 @@ public class StardogSparqlConnector: IDbConnector
     {
         var results = (SparqlResultSet) _connector.Query(_selectQueriesQuery);
 
-        return (from sparqlResult in results let query = sparqlResult.Value(_queryId).ToString()
-            let question = sparqlResult.Value(_questionName).ToString() select @$"{query}/||\{question.Replace('\n', ' ')}").ToList();
+        return (from sparqlResult in results let queryUri = sparqlResult.Value(_queryId).ToString()
+            let queryText = sparqlResult.Value(_queryText).ToString() let questionUri = sparqlResult.Value(_questionId).ToString() select 
+                @$"{questionUri}/||\{queryUri}/||\{queryText.Replace('\n', ' ')}").ToList();
     }
 
     public bool UploadToDb()
@@ -411,28 +416,27 @@ public static class SparqlParser
     {
         var modifierStats = new Dictionary<string, int>
             {
-                ["urn:qa:benchmark#numberOfModifierOrderBy"] = GetOrderBys(query),
-                ["urn:qa:benchmark#numberOfModifierLimit"] = GetLimits(query),
-                ["urn:qa:benchmark#numberOfModifierHaving"] = GetHaving(query),
-                ["urn:qa:benchmark#numberOfModifierOffset"] = GetOffsets(query),
-                ["urn:qa:benchmark#numberOfModifierGroupBy"] = GetGroupBys(query)
+                ["urn:qado#numberOfModifierOrderBy"] = GetOrderBys(query),
+                ["urn:qado#numberOfModifierLimit"] = GetLimits(query),
+                ["urn:qado#numberOfModifierHaving"] = GetHaving(query),
+                ["urn:qado#numberOfModifierOffset"] = GetOffsets(query),
+                ["urn:qado#numberOfModifierGroupBy"] = GetGroupBys(query)
             };
 
-        modifierStats["urn:qa:benchmark#numberOfModifiers"] = modifierStats.Values.Sum();
+        modifierStats["urn:qado#numberOfModifiers"] = modifierStats.Values.Sum();
         
         var queryStats = new Dictionary<string, int>
         {
-            ["urn:qa:benchmark#numberOfTriples"] = GetTriples(query.RootGraphPattern),
-            ["urn:qa:benchmark#numberOfFilters"] = GetFilters(query.RootGraphPattern),
-            ["urn:qa:benchmark#numberOfVariables"] = query.Variables.Count(),
-            ["urn:qa:benchmark#numberOfResources"] = GetResources(query.RootGraphPattern, true),
-            ["urn:qa:benchmark#normalizedQueryLength"] = GetQueryLength(query),
-            ["urn:qa:benchmark#numberOfResourcesSubjectsObjects"] = GetResources(query.RootGraphPattern, false)
+            ["urn:qado#numberOfTriples"] = GetTriples(query.RootGraphPattern),
+            ["urn:qado#numberOfFilters"] = GetFilters(query.RootGraphPattern),
+            ["urn:qado#numberOfVariables"] = query.Variables.Count(),
+            ["urn:qado#numberOfResources"] = GetResources(query.RootGraphPattern, true),
+            ["urn:qado#normalizedQueryLength"] = GetQueryLength(query),
+            ["urn:qado#numberOfResourcesSubjectsObjects"] = GetResources(query.RootGraphPattern, false)
         };
 
-        queryStats["urn:qa:benchmark#numberOfResourcesPredicates"] = queryStats["urn:qa:benchmark#numberOfResources"] -
-                                                                     queryStats[
-                                                                         "urn:qa:benchmark#numberOfResourcesSubjectsObjects"];
+        queryStats["urn:qado#numberOfResourcesPredicates"] = queryStats["urn:qado#numberOfResources"] -
+                                                                     queryStats["urn:qado#numberOfResourcesSubjectsObjects"];
 
         foreach (var entry in modifierStats)
         {

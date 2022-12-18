@@ -8,7 +8,7 @@ using SPARQLParser;
 using System.Text.Json;
 using VDS.RDF.Query;
 
-const int batchSize = 40;
+const int batchSize = 128;
 
 // custom prefixes for analysed SPARQL queries
 var prefixDictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText("prefixes.json"));
@@ -16,7 +16,7 @@ var prefixDictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(Fi
 var statisticsPath = Path.Join("analyse", "statistics.json");
 
 // prefixes for the insert statement
-const string qab = "urn:qa:benchmark#";
+const string qado = "urn:qado#";
 
 // query parser and Stardog connection
 var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
@@ -46,18 +46,19 @@ var count = 0;
 var triples = new List<Triple>();
 
 var insert = new StringBuilder();
-insert.Append("PREFIX qab: <").Append(qab).Append(">\nINSERT{\n");
+insert.Append("PREFIX qado: <").Append(qado).Append(">\nINSERT{\n");
 
 var batch = 0;
 
 foreach (var queryString in queries)
 {
     var g = new Graph();
-    g.NamespaceMap.AddNamespace("qab", new Uri(qab));
+    g.NamespaceMap.AddNamespace("qado", new Uri(qado));
     
     // get SPARQL query, question ID and benchmark name
     var queryText = queryString.Split(@"/||\").Last().Replace(" OR ", " || ") ;
     var question = queryString.Split(@"/||\").First();
+    var queryUri = queryString.Split(@"/||\").Skip(1).First();
     var benchmarkDataset = question.Split("-question").First();
 
     try
@@ -121,11 +122,11 @@ foreach (var queryString in queries)
         var queryType = query.QueryType.ToString();
 
         // create triples for the INSERT query with the statistics
-        triples.AddRange(queryStats.Select(modifierEntry => new Triple(g.CreateUriNode(new Uri(question)), 
+        triples.AddRange(queryStats.Select(modifierEntry => new Triple(g.CreateUriNode(new Uri(queryUri)), 
             g.CreateUriNode(new Uri(modifierEntry.Key)), g.CreateLiteralNode(modifierEntry.Value.ToString(), 
                 new Uri(XmlSpecsHelper.XmlSchemaDataTypeNonNegativeInteger)))));
         
-        triples.Add(new Triple(g.CreateUriNode(new Uri(question)), g.CreateUriNode(new Uri("urn:qa:benchmark#queryType")),
+        triples.Add(new Triple(g.CreateUriNode(new Uri(queryUri)), g.CreateUriNode(new Uri("urn:qado#queryType")),
             g.CreateLiteralNode(queryType)));
 
         // batch parsed
@@ -156,7 +157,7 @@ foreach (var queryString in queries)
                     File.WriteAllText(Path.Join("analyse", $"{batch}.sparql"), insert.ToString());
 
                     triples.Clear();
-                    insert.Clear().Append("PREFIX qab: <").Append(qab).Append(">\nINSERT {\n");
+                    insert.Clear().Append("PREFIX qado: <").Append(qado).Append(">\nINSERT {\n");
 
                     Console.WriteLine($"Inserted batch {batch}..");
                     break;
@@ -170,7 +171,7 @@ foreach (var queryString in queries)
     catch (Exception e) when (e is RdfParseException or RdfException or NullReferenceException)
     {
         // store error message with question id
-        parseExceptions.Add( question + "    " + e.Message);
+        parseExceptions.Add( queryUri + "    " + e.Message);
 
         // count not parsable questions per benchmark
         if (questions.ContainsKey(benchmarkDataset))
@@ -211,7 +212,7 @@ while (triples.Count != 0)
     catch(RdfStorageException) {}
 }
 
-insert.Clear().Append("PREFIX qab: <").Append(qab).Append(">\nINSERT {\n");
+insert.Clear().Append("PREFIX qado: <").Append(qado).Append(">\nINSERT {\n");
 
 foreach (var benchmark in benchmarkPrefix.Keys)
 {
@@ -221,14 +222,13 @@ foreach (var benchmark in benchmarkPrefix.Keys)
     }
     
     foreach (var prefixUri in benchmarkPrefix[benchmark])
-        insert.Append("<").Append(benchmark).Append("-dataset> qab:hasPrefix <").Append(prefixUri).Append("> .\n");
+        insert.Append("<").Append(benchmark).Append("-dataset> qado:hasPrefix <").Append(prefixUri).Append("> .\n");
 }
 
 insert.Append("} WHERE {}");
 
 Console.WriteLine("Insert benchmark prefixes...");
 
-// run last INSERT query
 while (true)
 {
     try

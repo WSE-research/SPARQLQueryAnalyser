@@ -1,7 +1,8 @@
-PREFIX qab: <urn:qa:benchmark#> 
+PREFIX qado: <urn:qado#>
 
-SELECT ?question ?text 
+SELECT ?question ?query ?text
 {
-    ?question qab:isElementOf ?benchmark ; 
-        qab:hasSPARQLQuery/qab:queryText ?text . 
+    ?question qado:isElementOf ?benchmark ;
+    qado:hasSparqlQuery ?query .
+    ?query qado:hasQueryText ?text .
 }
