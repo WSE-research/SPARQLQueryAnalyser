@@ -118,7 +118,7 @@ public class SparqlDatasetController : Controller
 
         for (var i = 0; i < config.Queries.Count(); i++)
         {
-            queriesWithId.Add($@"urn:db-0-question-{i}/||\{config.Queries.GetItemByIndex(i)}");
+            queriesWithId.Add($@"urn:db-0-question-{i}/||\urn:db-0-query-{i}/||\{config.Queries.GetItemByIndex(i)}");
         }
         
         StoreState(queriesWithId, createdState);
