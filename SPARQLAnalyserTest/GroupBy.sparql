@@ -1,4 +1,4 @@
-PREFIX qab: <urn:qa:benchmark#>
+PREFIX qab: <urn:qado#>
 
 SELECT ?benchmark (COUNT(?question) AS ?questions)
 {

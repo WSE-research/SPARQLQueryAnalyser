@@ -1,7 +1,9 @@
 ﻿using System.ComponentModel;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using VDS.RDF;
 using VDS.RDF.Query;
+using VDS.RDF.Query.Paths;
 using VDS.RDF.Query.Patterns;
 using VDS.RDF.Storage;
 
@@ -161,6 +163,11 @@ public static class SparqlParser
         // Get resources of all child graphs
         var resources = pattern.ChildGraphPatterns.Sum(childPattern => GetResources(childPattern, predicates));
 
+        if (pattern.InlineData is not null)
+        {
+            resources += pattern.InlineData.Tuples.Count();    
+        }
+
         // foreach triple in current graph
         foreach (var triplePattern in pattern.TriplePatterns)
         {
@@ -171,27 +178,89 @@ public static class SparqlParser
                 resources += GetResources(subQueryPattern.SubQuery.RootGraphPattern, predicates);
                 continue;
             }
-            
-            // triple is no normal triple (e. g. BIND, FILTER, ...)
-            if (triplePattern is not TriplePattern triple) continue;
+
+            switch (triplePattern)
+            {
+                // triple is no normal triple (e. g. BIND, FILTER, ...)
+                case TriplePattern triple:
+                {
+                    resources += GetSubjectObjects(triplePattern);
+                    
+                    // predicate is a resource
+                    if (predicates && triple.Predicate is NodeMatchPattern)
+                    {
+                        resources++;
+                    }
+
+                    break;
+                }
+                case PropertyPathPattern pathPattern:
+                    resources += GetSubjectObjects(triplePattern);
+                    if (predicates)
+                    {
+                        if (pathPattern.Path is BaseUnaryPath path)
+                        {
+                            resources += TraversePath(path);
+                        }
+                        else
+                        {
+                            resources += TraversePath((BaseBinaryPath) pathPattern.Path);  
+                        }
+                    }
+                    break;
+            }
+        }
+
+        return resources;
+    }
+
+    private static int TraversePath(BaseBinaryPath path)
+    {
+        var resources = 0;
+
+        if (path.RhsPath is Property { Predicate: UriNode })
+        {
+            resources++;
+        }
+
+        switch (path.LhsPath)
+        {
+            case Property { Predicate: UriNode }:
+                return ++resources;
+            case BaseBinaryPath leftPath:
+                resources += TraversePath(leftPath);
+                break;
+        }
+
+        return resources;
+    }
+
+    private static int TraversePath(BaseUnaryPath path)
+    {
+        var resources = 0;
+
+        if (path.Path is Property { Predicate: UriNode })
+        {
+            resources++;
+        }
         
-            // subject is a resource
-            if (triple.Subject is NodeMatchPattern)
-            {
-                resources++;
-            }
+        return resources;
+    }
 
-            // predicate is a resource
-            if (predicates && triple.Predicate is NodeMatchPattern)
-            {
-                resources++;
-            }
+    private static int GetSubjectObjects(dynamic triple)
+    {
+        var resources = 0;
+        
+        // subject is a resource
+        if (triple.Subject is NodeMatchPattern)
+        {
+            resources++;
+        }
 
-            // object is a resource
-            if (triple.Object is NodeMatchPattern)
-            {
-                resources++;
-            }
+        // object is a resource
+        if (triple.Object is NodeMatchPattern)
+        {
+            resources++;
         }
 
         return resources;

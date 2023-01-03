@@ -8,12 +8,14 @@ using SPARQLParser;
 using System.Text.Json;
 using VDS.RDF.Query;
 
-const int batchSize = 128;
+const int batchSize = 256;
+var analysisPath = Environment.GetEnvironmentVariable("docker-analysis-path");
 
 // custom prefixes for analysed SPARQL queries
 var prefixDictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText("prefixes.json"));
+var basePath = analysisPath ?? "analyse";
 
-var statisticsPath = Path.Join("analyse", "statistics.json");
+var statisticsPath = Path.Join(basePath, "statistics.json");
 
 // prefixes for the insert statement
 const string qado = "urn:qado#";
@@ -21,10 +23,10 @@ const string qado = "urn:qado#";
 // query parser and Stardog connection
 var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
 
-var dbConfig = JsonSerializer.Deserialize<DatabaseConfig>(File.ReadAllText(Path.Join("analyse", "connector.json")));
+var dbConfig = JsonSerializer.Deserialize<DatabaseConfig>(File.ReadAllText(Path.Join(basePath, "connector.json")));
 var queryReader = dbConfig?.Construct();
 var queries = File.ReadAllLines(Path.Join("analyse", "queries"));
-var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(Path.Join("analyse", "state.json")));
+var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(Path.Join(basePath, "state.json")));
 var statistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(File.ReadAllText(statisticsPath));
 
 if (state is null) return;
@@ -154,7 +156,7 @@ foreach (var queryString in queries)
                         queryReader.UploadStats(insert.ToString());
                     }
                     
-                    File.WriteAllText(Path.Join("analyse", $"{batch}.sparql"), insert.ToString());
+                    File.WriteAllText(Path.Join(basePath, $"{batch}.sparql"), insert.ToString());
 
                     triples.Clear();
                     insert.Clear().Append("PREFIX qado: <").Append(qado).Append(">\nINSERT {\n");
@@ -206,7 +208,7 @@ while (triples.Count != 0)
             queryReader.UploadStats(insert.ToString());    
         }
         
-        File.WriteAllText(Path.Join("analyse", $"{++batch}.sparql"), insert.ToString());
+        File.WriteAllText(Path.Join(basePath, $"{++batch}.sparql"), insert.ToString());
         triples.Clear();
     }
     catch(RdfStorageException) {}
@@ -238,7 +240,7 @@ while (true)
             queryReader.UploadStats(insert.ToString());    
         }
         
-        File.WriteAllText(Path.Join("analyse", $"{++batch}.sparql"), insert.ToString());
+        File.WriteAllText(Path.Join(basePath, $"{++batch}.sparql"), insert.ToString());
         break;
     }
     catch(RdfStorageException) {}

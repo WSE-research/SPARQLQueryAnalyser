@@ -1,0 +1,3 @@
+SELECT * {
+    ?s <urn:a>/<urn:b> ?o .
+}
