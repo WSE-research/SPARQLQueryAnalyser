@@ -20,10 +20,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="analysis" />
-    </ItemGroup>
-
-    <ItemGroup>
       <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\connector.json" />
       <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\queries.json" />
       <_ContentIncludedByDefault Remove="analysis\70ed17a9-48eb-444d-862a-7636f8ca34e7\state.json" />

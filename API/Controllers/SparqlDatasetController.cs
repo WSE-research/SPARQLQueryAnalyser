@@ -173,10 +173,8 @@ public class SparqlDatasetController : Controller
         var containerConfig = await client.Containers.CreateContainerAsync(new CreateContainerParameters
         {
             Image = "sparql-analyser:latest",
-            HostConfig = new HostConfig
-            {
-                Mounts = new List<Mount> { new() {Source = fullIdPath, Target = "/app/analyse", Type = "bind"}}
-            }
+            HostConfig = GetHostConfig(fullIdPath),
+            Env = RunsOnDocker() ? new List<string> { $"docker-analysis-path=analysis/{id}" } : new List<string>()
         });
 
         var containerId = containerConfig.ID;
@@ -190,5 +188,28 @@ public class SparqlDatasetController : Controller
         {
             _logger.Log(LogLevel.Error, "Container {Id} didn't start!", containerId);
         }
+    }
+
+    private static HostConfig GetHostConfig(string fullIdPath)
+    {
+        var isDocker = RunsOnDocker();
+
+        if (isDocker)
+        {
+            return new HostConfig
+            {
+                Binds = new List<string> { "sparql-analyse:/app/analysis" }
+            };
+        }
+        
+        return new HostConfig
+        {
+            Mounts = new List<Mount> { new() { Source = fullIdPath, Target = "/app/analysis", Type = "bind" } }
+        };
+    }
+
+    private static bool RunsOnDocker()
+    {
+        return Environment.GetEnvironmentVariable("useDocker") is not null;
     }
 }

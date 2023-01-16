@@ -13,7 +13,7 @@ var analysisPath = Environment.GetEnvironmentVariable("docker-analysis-path");
 
 // custom prefixes for analysed SPARQL queries
 var prefixDictionary = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText("prefixes.json"));
-var basePath = analysisPath ?? "analyse";
+var basePath = analysisPath ?? "analysis";
 
 var statisticsPath = Path.Join(basePath, "statistics.json");
 
@@ -25,7 +25,7 @@ var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
 
 var dbConfig = JsonSerializer.Deserialize<DatabaseConfig>(File.ReadAllText(Path.Join(basePath, "connector.json")));
 var queryReader = dbConfig?.Construct();
-var queries = File.ReadAllLines(Path.Join("analyse", "queries"));
+var queries = File.ReadAllLines(Path.Join(basePath, "queries"));
 var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(Path.Join(basePath, "state.json")));
 var statistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(File.ReadAllText(statisticsPath));
 
