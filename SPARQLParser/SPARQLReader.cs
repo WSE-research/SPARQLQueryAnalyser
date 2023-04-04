@@ -1,6 +1,10 @@
 ﻿using System.ComponentModel;
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
+using System.Web;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using VDS.RDF;
 using VDS.RDF.Query;
 using VDS.RDF.Query.Paths;
@@ -23,70 +27,14 @@ public interface IDbConnector
     /// <summary>
     /// Execute an INSERT query for the statistics generated for the managed SPARQL queries
     /// </summary>
-    /// <param name="query">INSERT query for stardog database</param>
+    /// <param name="query">INSERT query for triplestore</param>
     public void UploadStats(string query);
     
     /// <summary>
     /// Load all queries from DB and build a list with them.
     /// </summary>
-    /// <returns>List of strings in the format "SPARQLQuery/||\QuestionID"</returns>
+    /// <returns>List of strings in the format "QuestionID/||\QueryID/||\SPARQLQuery"</returns>
     public IEnumerable<string> GetQueries();
-}
-
-/// <summary>
-/// Class providing SPARQL queries stored with Stardog
-/// </summary>
-public class StardogSparqlConnector: IDbConnector
-{
-    private readonly StardogConnector _connector;
-    private readonly string _selectQueriesQuery;
-    private readonly string _questionId;
-    private readonly string _queryId;
-    private readonly string _queryText;
-    private readonly bool _upload;
-
-    /// <summary>
-    /// Initialize connection to a Stardog instance
-    /// </summary>
-    /// <param name="stardogBaseUri">Base URI for the used Stardog instance (e. g. http://localhost:5820)</param>
-    /// <param name="stardogUsername">Stardog username</param>
-    /// <param name="stardogPassword">Stardog password</param>
-    /// <param name="database">Database used as query storage</param>
-    /// <param name="selectQueriesQuery">Query used to get the stored SPARQL queries</param>
-    /// <param name="upload">Use current DB to upload statistics</param>
-    /// <param name="questionId">Variable name of "selectQueriesQuery" for question ids</param>
-    /// <param name="queryId">Variable name of "selectQueriesQuery" for query ids</param>
-    /// <param name="queryText">Variable name of "selectQueriesQuery" for query string</param>
-    public StardogSparqlConnector(string stardogBaseUri, string stardogUsername, string stardogPassword,
-        string database, string selectQueriesQuery, bool upload, string questionId = "question", string queryId = "query", 
-        string queryText = "text")
-    {
-        _selectQueriesQuery = selectQueriesQuery;
-        _connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
-        _questionId = questionId;
-        _queryId = queryId;
-        _queryText = queryText;
-        _upload = upload;
-    }
-    
-    public void UploadStats(string query)
-    {
-        _connector.Update(query);
-    }
-    
-    public IEnumerable<string> GetQueries()
-    {
-        var results = (SparqlResultSet) _connector.Query(_selectQueriesQuery);
-
-        return (from sparqlResult in results let queryUri = sparqlResult.Value(_queryId).ToString()
-            let queryText = sparqlResult.Value(_queryText).ToString() let questionUri = sparqlResult.Value(_questionId).ToString() select 
-                @$"{questionUri}/||\{queryUri}/||\{queryText.Replace('\n', ' ')}").ToList();
-    }
-
-    public bool UploadToDb()
-    {
-        return _upload;
-    }
 }
 
 /// <summary>
@@ -518,11 +466,131 @@ public static class SparqlParser
 
 public enum DbType
 {
-    Unknown = -1, Stardog
+    Unknown = -1, Stardog, GraphDb
 }
 
 public class DatabaseConfig
 {
+    /// <summary>
+    /// Class providing SPARQL queries stored with Stardog (https://www.stardog.com/)
+    /// </summary>
+    private class StardogSparqlConnector: IDbConnector
+    {
+        private readonly StardogConnector _connector;
+        private readonly string _selectQueriesQuery;
+        private readonly string _questionId;
+        private readonly string _queryId;
+        private readonly string _queryText;
+        private readonly bool _upload;
+
+        /// <summary>
+        /// Initialize connection to a Stardog instance
+        /// </summary>
+        /// <param name="stardogBaseUri">Base URI for the used Stardog instance (e. g. http://localhost:5820)</param>
+        /// <param name="stardogUsername">Stardog username</param>
+        /// <param name="stardogPassword">Stardog password</param>
+        /// <param name="database">Database used as query storage</param>
+        /// <param name="selectQueriesQuery">Query used to get the stored SPARQL queries</param>
+        /// <param name="upload">Use current DB to upload statistics</param>
+        /// <param name="questionId">Variable name of "selectQueriesQuery" for question ids</param>
+        /// <param name="queryId">Variable name of "selectQueriesQuery" for query ids</param>
+        /// <param name="queryText">Variable name of "selectQueriesQuery" for query string</param>
+        internal StardogSparqlConnector(string stardogBaseUri, string stardogUsername, string stardogPassword,
+            string database, string selectQueriesQuery, bool upload, string questionId = "question", string queryId = "query", 
+            string queryText = "text")
+        {
+            _selectQueriesQuery = selectQueriesQuery;
+            _connector = new StardogConnector(stardogBaseUri, database, stardogUsername, stardogPassword);
+            _questionId = questionId;
+            _queryId = queryId;
+            _queryText = queryText;
+            _upload = upload;
+        }
+        
+        public void UploadStats(string query)
+        {
+            _connector.Update(query);
+        }
+        
+        public IEnumerable<string> GetQueries()
+        {
+            var results = (SparqlResultSet) _connector.Query(_selectQueriesQuery);
+
+            return (from sparqlResult in results let queryUri = sparqlResult.Value(_queryId).ToString()
+                let queryText = sparqlResult.Value(_queryText).ToString() let questionUri = sparqlResult.Value(_questionId).ToString() select 
+                    @$"{questionUri}/||\{queryUri}/||\{queryText.Replace('\n', ' ')}").ToList();
+        }
+
+        public bool UploadToDb()
+        {
+            return _upload;
+        }
+    }
+    
+    /// <summary>
+    /// Connector class for GraphDb instances (https://www.ontotext.com/products/graphdb/)
+    /// </summary>
+    private class GraphDbConnector : IDbConnector
+    {
+        private readonly bool _upload;
+        private readonly string _repositoryUri;
+        private readonly string _selectQuery;
+        private readonly string _questionId;
+        private readonly string _queryId;
+        private readonly string _queryText;
+        
+        internal GraphDbConnector(string dbUri, string username, string password, string database, string selectQuery,
+            bool upload, string questionId = "question", string queryId = "query", string queryText = "text")
+        {
+            dbUri = dbUri.Replace("://", $"://{username}:{password}@");
+            
+            _repositoryUri = $"{dbUri}/repositories/{database}";
+            _upload = upload;
+            _selectQuery = selectQuery;
+            _questionId = questionId;
+            _queryId = queryId;
+            _queryText = queryText;
+        }
+        
+        public bool UploadToDb()
+        {
+            return _upload;
+        }
+
+        public void UploadStats(string query)
+        {
+            var insertRequest = $"{_repositoryUri}/statements?update=" + HttpUtility.UrlEncode(query);
+            
+            var client = new HttpClient();
+            client.PostAsync(insertRequest, new MultipartContent()).Wait();
+        }
+
+        public IEnumerable<string> GetQueries()
+        {
+            var client = new HttpClient();
+            client.DefaultRequestHeaders.Accept.Clear();
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/sparql-result+json"));
+            var selectRequestUri = $"{_repositoryUri}?query=" + HttpUtility.UrlEncode(_selectQuery);
+            var request = client.GetStringAsync(selectRequestUri);
+            request.Wait();
+            var result = request.Result;
+            var sparqlResult = (JObject)JsonConvert.DeserializeObject(result)!;
+
+            var queries = new LinkedList<string>();
+
+            foreach (var binding in sparqlResult["results"]?["bindings"]!)
+            {
+                var currentQueryId = binding[_queryId]?["value"]?.Value<string>();
+                var currentQuestionId = binding[_questionId]?["value"]?.Value<string>();
+                var currentQuery = binding[_queryText]?["value"]?.Value<string>();
+                
+                queries.AddLast(@$"{currentQuestionId}/||\{currentQueryId}/||\{currentQuery}");
+            }
+
+            return queries;
+        }
+    }
+    
     public DbType Type { get; }
     public string SelectQuery { get; }
     public string Username { get; }
@@ -552,10 +620,12 @@ public class DatabaseConfig
     /// <exception cref="InvalidEnumArgumentException">An invalid setting has been provided</exception>
     public IDbConnector Construct()
     {
+        var dbFullUri = $"{DatabaseUri}:{DatabasePort}";
+        
         return Type switch
         {
-            DbType.Stardog => new StardogSparqlConnector($"{DatabaseUri}:{DatabasePort}", Username, Password,
-                DatabaseName, SelectQuery, Upload),
+            DbType.Stardog => new StardogSparqlConnector(dbFullUri, Username, Password, DatabaseName, SelectQuery, Upload),
+            DbType.GraphDb => new GraphDbConnector(dbFullUri, Username, Password, DatabaseName, SelectQuery, Upload),
             DbType.Unknown => throw new InvalidEnumArgumentException("Select a proper DB type"),
             _ => throw new InvalidEnumArgumentException("Invalid DB type selected")
         };

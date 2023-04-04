@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.ComponentModel;
+using System.Text.Json;
 using AngleSharp.Common;
 using Microsoft.AspNetCore.Mvc;
 using SPARQLParser;
@@ -72,31 +73,27 @@ public class SparqlDatasetController : Controller
     {
         var createdState = new SparqlAnalysisState();
         var runDirectory = BuildDirectory(createdState);
-        
-        IDbConnector connector;
 
-        switch (config.Type)
+        try
         {
-            case DbType.Stardog:
-                connector = new StardogSparqlConnector($"{config.DatabaseUri}:{config.DatabasePort}", 
-                    config.Username, config.Password, config.DatabaseName, config.SelectQuery, config.Upload);
-                break;
-            case DbType.Unknown:
-                return BadRequest("No database type defined");
-            default:
-                return BadRequest("Missing database type selection");
+            var connector = config.Construct();
+
+            _logger.Log(LogLevel.Information, "Start new analysis for {Id} on stardog at {CreatedAt}", createdState.Id,
+                createdState.CreatedAt);
+
+            var queries = connector.GetQueries();
+
+            Directory.CreateDirectory(runDirectory);
+
+            StoreState(queries, createdState, config);
+            StartDockerAnalyser(createdState.Id);
+
+            return createdState;
         }
-
-        _logger.Log(LogLevel.Information, "Start new analysis for {Id} on stardog at {CreatedAt}", createdState.Id, createdState.CreatedAt);
-
-        var queries = connector.GetQueries();
-
-        Directory.CreateDirectory(runDirectory);
-
-        StoreState(queries, createdState, config);
-        StartDockerAnalyser(createdState.Id);
-
-        return createdState;
+        catch (InvalidEnumArgumentException)
+        {
+            return BadRequest("Invalid DB type provided!");
+        }
     }
     
     /// <summary>
