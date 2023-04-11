@@ -1,0 +1,38 @@
+name: Docker Image CI
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build the SPARQL analyser
+      run: docker build . --file SPARQLAnalyser/Dockerfile --tag wseresearch/sparql-analyser:latest
+    - name: Build the SPARQL analyser Web API
+      run: docker build . --file API/Dockerfile --tag wseresearch/sparql-analyser-api:latest
+    - name: Docker Login
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USER }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    - name: Tag SPARQL analyser docker image version
+      if: startsWith(github.ref, 'refs/tags/')
+      run: docker tag wseresearch/sparql-analyser:latest "wseresearch/sparql-analyser:${{ github.ref_name }}"
+    - name: Tag SPARQL analyser API docker image version
+      if: startsWith(github.ref, 'refs/tags/')
+      run: docker tag wseresearch/sparql-analyser-api:latest "wseresearch/sparql-analyser-api:${{ github.ref_name }}"
+    - name: Push latest SPARQL analyser docker image
+      if: startsWith(github.ref, 'refs/tags/')
+      run: docker push wseresearch/sparql-analyser:latest
+    - name: Push latest SPARQL analyser API docker image
+      if: startsWith(github.ref, 'refs/tags/')
+      run: docker push wseresearch/sparql-analyser-api:latest
+    - name: Push SPARQL analyser docker image version
+      if: startsWith(github.ref, 'refs/tags/')
+      run: docker push "wseresearch/sparql-analyser:${{ github.ref_name }}"
+    - name: Push SPARQL analyser API docker image version
+      if: startsWith(github.ref, 'refs/tags/')
+      run: docker push "wseresearch/sparql-analyser-api:${{ github.ref_name }}"
