@@ -8,7 +8,7 @@ using SPARQLParser;
 using System.Text.Json;
 using VDS.RDF.Query;
 
-const int batchSize = 256;
+const int batchSize = 16;
 var analysisPath = Environment.GetEnvironmentVariable("docker-analysis-path");
 
 // custom prefixes for analysed SPARQL queries

@@ -4,11 +4,12 @@
       <settings>
         <option name="imageTag" value="sparql-analyser:latest" />
         <option name="buildOnly" value="true" />
+        <option name="containerName" value="" />
         <option name="contextFolderPath" value="." />
         <option name="sourceFilePath" value="SPARQLAnalyser/Dockerfile" />
       </settings>
     </deployment>
-    <EXTENSION ID="com.jetbrains.rider.docker.debug" isFastModeEnabled="true" isPublishEnabled="true" />
+    <EXTENSION ID="com.jetbrains.rider.docker.debug" isFastModeEnabled="true" isSslEnabled="false" />
     <method v="2" />
   </configuration>
 </component>

@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.RegularExpressions;
-using System.Web;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using VDS.RDF;
@@ -542,7 +541,7 @@ public class DatabaseConfig
         internal GraphDbConnector(string dbUri, string username, string password, string database, string selectQuery,
             bool upload, string questionId = "question", string queryId = "query", string queryText = "text")
         {
-            dbUri = dbUri.Replace("://", $"://{username}:{password}@");
+            // dbUri = dbUri.Replace("://", $"://{username}:{password}@");
             
             _repositoryUri = $"{dbUri}/repositories/{database}";
             _upload = upload;
@@ -559,18 +558,20 @@ public class DatabaseConfig
 
         public void UploadStats(string query)
         {
-            var insertRequest = $"{_repositoryUri}/statements?update=" + HttpUtility.UrlEncode(query);
+            var insertRequest = $"{_repositoryUri}/statements?update=" + Uri.EscapeDataString(query.Replace("\n", " "));
             
             var client = new HttpClient();
-            client.PostAsync(insertRequest, new MultipartContent()).Wait();
+
+            var response = client.PostAsync(insertRequest, new MultipartContent());
+            response.Wait();
         }
 
         public IEnumerable<string> GetQueries()
         {
             var client = new HttpClient();
             client.DefaultRequestHeaders.Accept.Clear();
-            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/sparql-result+json"));
-            var selectRequestUri = $"{_repositoryUri}?query=" + HttpUtility.UrlEncode(_selectQuery);
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/sparql-results+json"));
+            var selectRequestUri = $"{_repositoryUri}?query=" + Uri.EscapeDataString(_selectQuery);
             var request = client.GetStringAsync(selectRequestUri);
             request.Wait();
             var result = request.Result;
@@ -582,7 +583,7 @@ public class DatabaseConfig
             {
                 var currentQueryId = binding[_queryId]?["value"]?.Value<string>();
                 var currentQuestionId = binding[_questionId]?["value"]?.Value<string>();
-                var currentQuery = binding[_queryText]?["value"]?.Value<string>();
+                var currentQuery = binding[_queryText]?["value"]?.Value<string>()?.Replace('\n', ' ');
                 
                 queries.AddLast(@$"{currentQuestionId}/||\{currentQueryId}/||\{currentQuery}");
             }
