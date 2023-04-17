@@ -562,7 +562,7 @@ public class DatabaseConfig
             
             var client = new HttpClient();
 
-            var response = client.PostAsync(insertRequest, new MultipartContent());
+            var response = client.PostAsync(insertRequest, null);
             response.Wait();
         }
 
