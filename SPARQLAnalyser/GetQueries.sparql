@@ -1,1 +1,1 @@
-PREFIX qado: <urn:qado#> SELECT ?question ?query ?text { ?question qado:isElementOf ?benchmark ; qado:hasSparqlQuery ?query . ?query qado:hasQueryText ?text . }
+PREFIX qado: <http://purl.com/qado/ontology.ttl#> SELECT ?question ?query ?text { ?question qado:isElementOf ?benchmark ; qado:hasSparqlQuery ?query . ?query qado:hasQueryText ?text . }

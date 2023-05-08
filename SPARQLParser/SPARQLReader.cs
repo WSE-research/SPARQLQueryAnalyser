@@ -432,27 +432,27 @@ public static class SparqlParser
     {
         var modifierStats = new Dictionary<string, int>
             {
-                ["urn:qado#numberOfModifierOrderBy"] = GetOrderBys(query),
-                ["urn:qado#numberOfModifierLimit"] = GetLimits(query),
-                ["urn:qado#numberOfModifierHaving"] = GetHaving(query),
-                ["urn:qado#numberOfModifierOffset"] = GetOffsets(query),
-                ["urn:qado#numberOfModifierGroupBy"] = GetGroupBys(query)
+                ["http://purl.com/qado/ontology.ttl#numberOfModifierOrderBy"] = GetOrderBys(query),
+                ["http://purl.com/qado/ontology.ttl#numberOfModifierLimit"] = GetLimits(query),
+                ["http://purl.com/qado/ontology.ttl#numberOfModifierHaving"] = GetHaving(query),
+                ["http://purl.com/qado/ontology.ttl#numberOfModifierOffset"] = GetOffsets(query),
+                ["http://purl.com/qado/ontology.ttl#numberOfModifierGroupBy"] = GetGroupBys(query)
             };
 
-        modifierStats["urn:qado#numberOfModifiers"] = modifierStats.Values.Sum();
+        modifierStats["http://purl.com/qado/ontology.ttl#numberOfModifiers"] = modifierStats.Values.Sum();
         
         var queryStats = new Dictionary<string, int>
         {
-            ["urn:qado#numberOfTriples"] = GetTriples(query.RootGraphPattern),
-            ["urn:qado#numberOfFilters"] = GetFilters(query.RootGraphPattern),
-            ["urn:qado#numberOfVariables"] = query.Variables.Count(),
-            ["urn:qado#numberOfResources"] = GetResources(query.RootGraphPattern, true),
-            ["urn:qado#normalizedQueryLength"] = GetQueryLength(query),
-            ["urn:qado#numberOfResourcesSubjectsObjects"] = GetResources(query.RootGraphPattern, false)
+            ["http://purl.com/qado/ontology.ttl#numberOfTriples"] = GetTriples(query.RootGraphPattern),
+            ["http://purl.com/qado/ontology.ttl#numberOfFilters"] = GetFilters(query.RootGraphPattern),
+            ["http://purl.com/qado/ontology.ttl#numberOfVariables"] = query.Variables.Count(),
+            ["http://purl.com/qado/ontology.ttl#numberOfResources"] = GetResources(query.RootGraphPattern, true),
+            ["http://purl.com/qado/ontology.ttl#normalizedQueryLength"] = GetQueryLength(query),
+            ["http://purl.com/qado/ontology.ttl#numberOfResourcesSubjectsObjects"] = GetResources(query.RootGraphPattern, false)
         };
 
-        queryStats["urn:qado#numberOfResourcesPredicates"] = queryStats["urn:qado#numberOfResources"] -
-                                                                     queryStats["urn:qado#numberOfResourcesSubjectsObjects"];
+        queryStats["http://purl.com/qado/ontology.ttl#numberOfResourcesPredicates"] = queryStats["http://purl.com/qado/ontology.ttl#numberOfResources"] -
+                                                                     queryStats["http://purl.com/qado/ontology.ttl#numberOfResourcesSubjectsObjects"];
 
         foreach (var entry in modifierStats)
         {

@@ -18,7 +18,7 @@ var basePath = analysisPath ?? "analysis";
 var statisticsPath = Path.Join(basePath, "statistics.json");
 
 // prefixes for the insert statement
-const string qado = "urn:qado#";
+const string qado = "http://purl.com/qado/ontology.ttl#";
 
 // query parser and Stardog connection
 var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
@@ -128,7 +128,7 @@ foreach (var queryString in queries)
             g.CreateUriNode(new Uri(modifierEntry.Key)), g.CreateLiteralNode(modifierEntry.Value.ToString(), 
                 new Uri(XmlSpecsHelper.XmlSchemaDataTypeNonNegativeInteger)))));
         
-        triples.Add(new Triple(g.CreateUriNode(new Uri(queryUri)), g.CreateUriNode(new Uri("urn:qado#queryType")),
+        triples.Add(new Triple(g.CreateUriNode(new Uri(queryUri)), g.CreateUriNode(new Uri("http://purl.com/qado/ontology.ttl#queryType")),
             g.CreateLiteralNode(queryType)));
 
         // batch parsed

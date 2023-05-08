@@ -1,4 +1,4 @@
-PREFIX qab: <urn:qado#>
+PREFIX qab: <http://purl.com/qado/ontology.ttl#>
 
 SELECT ?benchmark (COUNT(?question) AS ?questions)
 {
