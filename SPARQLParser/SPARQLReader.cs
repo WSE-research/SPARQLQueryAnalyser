@@ -516,7 +516,7 @@ public class DatabaseConfig
             var results = (SparqlResultSet) _connector.Query(_selectQueriesQuery);
 
             return (from sparqlResult in results let queryUri = sparqlResult.Value(_queryId).ToString()
-                let queryText = sparqlResult.Value(_queryText).ToString() let questionUri = sparqlResult.Value(_questionId).ToString() select 
+                let queryText = ((LiteralNode)sparqlResult.Value(_queryText)).Value let questionUri = sparqlResult.Value(_questionId).ToString() select 
                     @$"{questionUri}/||\{queryUri}/||\{queryText.Replace('\n', ' ')}").ToList();
         }
 
