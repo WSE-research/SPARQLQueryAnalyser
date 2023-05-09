@@ -25,7 +25,8 @@ var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
 
 var dbConfig = JsonSerializer.Deserialize<DatabaseConfig>(File.ReadAllText(Path.Join(basePath, "connector.json")));
 var queryReader = dbConfig?.Construct();
-var queries = File.ReadAllLines(Path.Join(basePath, "queries"));
+//var queries = File.ReadAllLines(Path.Join(basePath, "queries"));
+var queries = queryReader.GetQueries().ToArray();
 var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(Path.Join(basePath, "state.json")));
 var statistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(File.ReadAllText(statisticsPath));
 
@@ -214,10 +215,10 @@ while (triples.Count != 0)
     catch(RdfStorageException) {}
 }
 
-insert.Clear().Append("PREFIX qado: <").Append(qado).Append(">\nINSERT {\n");
-
 foreach (var benchmark in benchmarkPrefix.Keys)
 {
+    insert.Clear().Append("PREFIX qado: <").Append(qado).Append(">\nINSERT {\n");
+    
     if (benchmarkPrefix[benchmark].Count == 0)
     {
         benchmarkPrefix[benchmark].Add(new Uri("urn:no:prefix"));
@@ -225,25 +226,25 @@ foreach (var benchmark in benchmarkPrefix.Keys)
     
     foreach (var prefixUri in benchmarkPrefix[benchmark])
         insert.Append("<").Append(benchmark).Append("-dataset> qado:hasPrefix <").Append(prefixUri).Append("> .\n");
-}
+    
+    insert.Append("} WHERE {}");
 
-insert.Append("} WHERE {}");
+    Console.WriteLine($"Insert benchmark {benchmark} prefixes...");
 
-Console.WriteLine("Insert benchmark prefixes...");
-
-while (true)
-{
-    try
+    while (true)
     {
-        if (queryReader is not null && queryReader.UploadToDb())
+        try
         {
-            queryReader.UploadStats(insert.ToString());    
-        }
+            if (queryReader is not null && queryReader.UploadToDb())
+            {
+                queryReader.UploadStats(insert.ToString());    
+            }
         
-        File.WriteAllText(Path.Join(basePath, $"{++batch}.sparql"), insert.ToString());
-        break;
+            File.WriteAllText(Path.Join(basePath, $"{++batch}.sparql"), insert.ToString());
+            break;
+        }
+        catch(RdfStorageException) {}
     }
-    catch(RdfStorageException) {}
 }
 
 statistics.Parsable = parsable - nonParsable;

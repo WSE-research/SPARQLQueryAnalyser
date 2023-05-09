@@ -13,6 +13,7 @@ public class Tests
         var stats = SparqlParser.AnalyseQuery(_queryParser.ParseFromFile("BasicSPARQL.sparql"));
         Assert.Multiple(() =>
         {
+            Assert.That(stats["http://purl.com/qado/ontology.ttl#normalizedQueryLength"], Is.EqualTo(88));
             Assert.That(stats["http://purl.com/qado/ontology.ttl#numberOfTriples"], Is.EqualTo(1));
             Assert.That(stats["http://purl.com/qado/ontology.ttl#numberOfVariables"], Is.EqualTo(2));
             Assert.That(stats["http://purl.com/qado/ontology.ttl#numberOfResources"], Is.EqualTo(1));

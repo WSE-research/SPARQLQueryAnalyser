@@ -38,8 +38,4 @@
       <_ContentIncludedByDefault Remove="analysis\13d653fa-938b-4a5b-a8bf-d4a3ea399562\statistics.json" />
     </ItemGroup>
 
-    <ItemGroup>
-      <Folder Include="analysis\" />
-    </ItemGroup>
-
 </Project>
