@@ -560,7 +560,7 @@ public class DatabaseConfig
         {
             var insertRequest = $"{_repositoryUri}/statements?update=" + Uri.EscapeDataString(query.Replace("\n", " "));
             
-            var client = new HttpClient();
+            var client = new HttpClient{Timeout = new TimeSpan(0, 0, 0, 60)};
 
             try
             {
