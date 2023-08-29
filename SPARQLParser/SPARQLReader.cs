@@ -591,9 +591,23 @@ public class DatabaseConfig
                 Console.Error.WriteLine(e.Message);
                 Console.Error.WriteLine(e.StackTrace);
             }
+            catch (AggregateException e)
+            {
+                Console.Error.WriteLine("Exception while execution occured");
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine(e.StackTrace);
+
+                foreach (var innerException in e.InnerExceptions)
+                {
+                    Console.Error.WriteLine("Inner Exception: {0}", innerException.GetType());
+                    Console.Error.WriteLine(innerException.Message);
+                    Console.Error.WriteLine(innerException.StackTrace);
+                }
+            }
             catch (Exception e)
             {
                 Console.Error.WriteLine("General exception caused");
+                Console.Error.WriteLine("Exception type: {0}", e.GetType());
                 Console.Error.WriteLine(e.Message);
                 Console.Error.WriteLine(e.StackTrace);
             }
