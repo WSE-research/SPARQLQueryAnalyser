@@ -602,6 +602,11 @@ public class DatabaseConfig
                     Console.Error.WriteLine("Inner Exception: {0}", innerException.GetType());
                     Console.Error.WriteLine(innerException.Message);
                     Console.Error.WriteLine(innerException.StackTrace);
+
+                    if (innerException.InnerException == null) continue;
+                    
+                    Console.Error.WriteLine(innerException.InnerException.Message);
+                    Console.Error.WriteLine(innerException.InnerException.StackTrace);
                 }
             }
             catch (Exception e)
