@@ -26,7 +26,7 @@ var queryParser = new SparqlQueryParser(SparqlQuerySyntax.Extended);
 var dbConfig = JsonSerializer.Deserialize<DatabaseConfig>(File.ReadAllText(Path.Join(basePath, "connector.json")));
 var queryReader = dbConfig?.Construct();
 //var queries = File.ReadAllLines(Path.Join(basePath, "queries"));
-var queries = queryReader.GetQueries().ToArray();
+var queries = queryReader!.GetQueries().ToArray();
 var state = JsonSerializer.Deserialize<SparqlAnalysisState>(File.ReadAllText(Path.Join(basePath, "state.json")));
 var statistics = JsonSerializer.Deserialize<SparqlAnalysisStatistics>(File.ReadAllText(statisticsPath));
 
