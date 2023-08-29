@@ -35,6 +35,7 @@
           <option value="http://xmlns.com" />
           <option value="http://purl.org" />
           <option value="http://wikiba.se" />
+          <option value="http://purl.com" />
         </list>
       </option>
     </inspection_tool>

@@ -562,8 +562,41 @@ public class DatabaseConfig
             
             var client = new HttpClient();
 
-            var response = client.PostAsync(insertRequest, null);
-            response.Wait();
+            try
+            {
+                var response = client.PostAsync(insertRequest, null);
+                response.Wait();
+            }
+            catch (InvalidOperationException e)
+            {
+                Console.Error.WriteLine("Invalid Operation");
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine(e.StackTrace);
+            }
+            catch (HttpRequestException e)
+            {
+                Console.Error.WriteLine("HTTP Request failed");
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine(e.StackTrace);
+            }
+            catch (TaskCanceledException e)
+            {
+                Console.Error.WriteLine("Request canceled by main method");
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine(e.StackTrace);
+            }
+            catch (UriFormatException e)
+            {
+                Console.Error.WriteLine("Invalid URI format");
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine(e.StackTrace);
+            }
+            catch (Exception e)
+            {
+                Console.Error.WriteLine("General exception caused");
+                Console.Error.WriteLine(e.Message);
+                Console.Error.WriteLine(e.StackTrace);
+            }
         }
 
         public IEnumerable<string> GetQueries()
