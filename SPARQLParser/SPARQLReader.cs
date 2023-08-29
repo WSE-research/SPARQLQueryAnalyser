@@ -410,7 +410,7 @@ public static class SparqlParser
         {
             var fullUri = namespaces.GetNamespaceUri(prefix);
             var uriReplace = $" {fullUri}";
-            queryString = queryString.Replace($" {prefix}:", uriReplace);
+            queryString = queryString!.Replace($" {prefix}:", uriReplace);
             queryString = Regex.Replace(queryString, @$"{uriReplace}\w+", "<urn:placeholder>");
             queryString = queryString.Replace($"PREFIX {fullUri} <{fullUri}>", "");
 
@@ -420,7 +420,7 @@ public static class SparqlParser
             }
         }
 
-        return queryString.Replace("\n", "").Length;
+        return queryString!.Replace("\n", "").Length;
     }
     
     /// <summary>

@@ -53,6 +53,8 @@ insert.Append("PREFIX qado: <").Append(qado).Append(">\nINSERT{\n");
 
 var batch = 0;
 
+Console.WriteLine("Generating Triples for SPARQL queries...");
+
 foreach (var queryString in queries)
 {
     var g = new Graph();
@@ -161,8 +163,6 @@ foreach (var queryString in queries)
 
                     triples.Clear();
                     insert.Clear().Append("PREFIX qado: <").Append(qado).Append(">\nINSERT {\n");
-
-                    Console.WriteLine($"Inserted batch {batch}..");
                     break;
                 }
                 // query execution killed before finishing
@@ -191,7 +191,6 @@ foreach (var queryString in queries)
 }
 
 // finalize last batch
-Console.WriteLine("Inserting last triples...");
 foreach (var triple in triples)
 {
     insert.Append(triple.ToString(new NTriplesFormatter())).Append('\n');
