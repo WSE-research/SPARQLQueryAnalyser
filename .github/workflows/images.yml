@@ -7,7 +7,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Build the SPARQL analyser
       run: docker build . --file SPARQLAnalyser/Dockerfile --tag wseresearch/sparql-analyser:latest
     - name: Build the SPARQL analyser Web API
