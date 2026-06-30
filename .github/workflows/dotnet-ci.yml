@@ -1,0 +1,25 @@
+# .NET CI test gate: restores, builds and runs the NUnit test suite on every
+# PR/push. The tests are self-contained (they parse the bundled .sparql files),
+# so no external services or secrets are required.
+name: .NET CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "7.0.x"
+      - name: Restore dependencies
+        run: dotnet restore SPARQLAnalyser.sln
+      - name: Build
+        run: dotnet build SPARQLAnalyser.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test SPARQLAnalyser.sln --configuration Release --no-build --verbosity normal
