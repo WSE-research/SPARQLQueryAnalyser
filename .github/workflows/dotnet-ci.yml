@@ -14,12 +14,75 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Set up .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: "7.0.x"
+          dotnet-version: "10.0.x"
       - name: Restore dependencies
         run: dotnet restore SPARQLAnalyser.sln
       - name: Build
         run: dotnet build SPARQLAnalyser.sln --configuration Release --no-restore
       - name: Test
-        run: dotnet test SPARQLAnalyser.sln --configuration Release --no-build --verbosity normal
+        run: >-
+          dotnet test SPARQLAnalyser.sln --configuration Release --no-build
+          --verbosity normal --collect:"XPlat Code Coverage"
+          --results-directory ./coverage
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage
+          path: ./coverage/**/coverage.cobertura.xml
+          if-no-files-found: warn
+
+  # Audit the restored dependency graph. `dotnet list package --vulnerable`
+  # exits 0 even when it finds something, so the output has to be inspected.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - name: Restore dependencies
+        run: dotnet restore SPARQLAnalyser.sln
+      - name: Fail on known-vulnerable packages
+        run: |
+          dotnet list SPARQLAnalyser.sln package --vulnerable \
+            --include-transitive 2>&1 | tee audit.log
+          if grep -qE '^\s+> ' audit.log; then
+            echo "::error::vulnerable package(s) found in the dependency graph"
+            exit 1
+          fi
+
+  # The publish workflow (images.yml) only builds images on main/tags, so a
+  # base-image or framework bump could previously go green on a PR and still
+  # produce an image that fails to start. Build both images here and boot the
+  # API to catch load-time binding breaks before they are merged.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the SPARQL analyser image
+        run: docker build . --file SPARQLAnalyser/Dockerfile --tag sparql-analyser:ci
+      - name: Build the SPARQL analyser Web API image
+        run: docker build . --file API/Dockerfile --tag sparql-analyser-api:ci
+      - name: Smoke-test the Web API
+        run: |
+          docker run -d --name api-ci -p 8080:8080 \
+            -e ASPNETCORE_URLS=http://+:8080 \
+            -v /var/run/docker.sock:/var/run/docker.sock sparql-analyser-api:ci
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 3 http://localhost:8080/swagger/v1/swagger.json \
+                 -o /dev/null; then
+              echo "API answered after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "::error::API did not serve its OpenAPI document within 30s"
+          docker logs api-ci
+          exit 1
+      - name: Tear down
+        if: always()
+        run: docker rm -f api-ci || true
