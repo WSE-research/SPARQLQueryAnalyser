@@ -11,7 +11,7 @@
       <!-- Transitive via dotNetRDF; pinned forward to clear GHSA-pgww-w46g-26qg
            (mXSS in AngleSharp < 1.5.0). dotNetRDF 3.5.2 is already the latest
            release, so the fix has to be applied here. -->
-      <PackageReference Include="AngleSharp" Version="1.5.2" />
+      <PackageReference Include="AngleSharp" Version="1.9.1" />
     </ItemGroup>
 
 </Project>
